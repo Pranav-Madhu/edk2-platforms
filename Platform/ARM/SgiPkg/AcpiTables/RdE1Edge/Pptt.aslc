@@ -1,0 +1,230 @@
+/** @file
+* Processor Properties Topology Table (PPTT) for RD-E1-Edge platform
+*
+* This file describes the topological structure of the processor block on the
+* RD-E1-Edge platform in the form as defined by ACPI PPTT table. The RD-E1-Edge
+* platform includes two clusters with eight dual-thread CPUS. Each of the CPUs
+* include 32KB L1 Data cache, 32KB L1 Instruction cache and 256KB L2 cache.
+* Each cluster includes a 2MB L3 cache. The platform also includes a system
+* level cache of 8MB.
+*
+* Copyright (c) 2021, ARM Limited. All rights reserved.
+*
+* SPDX-License-Identifier: BSD-2-Clause-Patent
+*
+* @par Specification Reference:
+*   - ACPI 6.3, Chapter 5, Section 5.2.29, Processor Properties Topology Table
+**/
+
+#include <IndustryStandard/Acpi.h>
+#include <Library/AcpiLib.h>
+#include <Library/ArmLib.h>
+#include <Library/PcdLib.h>
+
+#include "SgiPlatform.h"
+#include "SgiAcpiHeader.h"
+
+#define THREAD_PER_CORE   2
+
+#define PPTT_THREAD_INIT(pid, cid, coreId, tid)                                \
+  {                                                                            \
+    EFI_ACPI_6_3_PPTT_STRUCTURE_PROCESSOR_INIT (                               \
+      sizeof (RDE1EDGE_PPTT_THREAD),        /* Length */                       \
+      PPTT_PROCESSOR_THREAD_FLAGS,          /* Flag */                         \
+      __builtin_offsetof (EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE,    \
+        Package.Cluster[cid].Core[coreId]), /* Parent */                       \
+      ((pid << 5) | (cid << 4) | (coreId << 1) | tid),                         \
+                                            /* ACPI Id */                      \
+      0                                     /* Num of private resource */      \
+    )                                                                          \
+  }
+
+#define PPTT_CORE_INIT(pid, cid, coreId)                                       \
+  {                                                                            \
+    /* Parameters for CPU Core */                                              \
+    EFI_ACPI_6_3_PPTT_STRUCTURE_PROCESSOR_INIT (                               \
+      __builtin_offsetof (RDE1EDGE_PPTT_CORE, DCache),  /* Length */           \
+      PPTT_PROCESSOR_CORE_THREADED_FLAGS,         /* Flag */                   \
+      __builtin_offsetof (EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE,    \
+        Package.Cluster[cid]),                    /* Parent */                 \
+      0,                                          /* ACPI Id */                \
+      2                                           /* Num of private resource */\
+    ),                                                                         \
+                                                                               \
+    /* Offsets of the private resources */                                     \
+    {                                                                          \
+      __builtin_offsetof (EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE,    \
+        Package.Cluster[cid].Core[coreId].DCache),                             \
+      __builtin_offsetof (EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE,    \
+        Package.Cluster[cid].Core[coreId].ICache)                              \
+    },                                                                         \
+                                                                               \
+    /* L1 Data cache parameters */                                             \
+    EFI_ACPI_6_3_PPTT_STRUCTURE_CACHE_INIT (                                   \
+      PPTT_CACHE_STRUCTURE_FLAGS,           /* Flag */                         \
+      __builtin_offsetof (EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE,    \
+        Package.Cluster[cid].Core[coreId].L2Cache),                            \
+                                            /* Next level of cache */          \
+      SIZE_32KB,                            /* Size */                         \
+      128,                                  /* Num of sets */                  \
+      4,                                    /* Associativity */                \
+      PPTT_DATA_CACHE_ATTR,                 /* Attributes */                   \
+      64                                    /* Line size */                    \
+    ),                                                                         \
+                                                                               \
+    /* L1 Instruction cache parameters */                                      \
+    EFI_ACPI_6_3_PPTT_STRUCTURE_CACHE_INIT (                                   \
+      PPTT_CACHE_STRUCTURE_FLAGS,           /* Flag */                         \
+      __builtin_offsetof (EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE,    \
+        Package.Cluster[cid].Core[coreId].L2Cache),                            \
+                                            /* Next level of cache */          \
+      SIZE_32KB,                            /* Size */                         \
+      128,                                  /* Num of sets */                  \
+      4,                                    /* Associativity */                \
+      PPTT_INST_CACHE_ATTR,                 /* Attributes */                   \
+      64                                    /* Line size */                    \
+    ),                                                                         \
+                                                                               \
+    /* L2 cache parameters */                                                  \
+    EFI_ACPI_6_3_PPTT_STRUCTURE_CACHE_INIT (                                   \
+      PPTT_CACHE_STRUCTURE_FLAGS,           /* Flag */                         \
+      0,                                    /* Next level of cache */          \
+      SIZE_256KB,                           /* Size */                         \
+      1024,                                 /* Num of sets */                  \
+      4,                                    /* Associativity */                \
+      PPTT_UNIFIED_CACHE_ATTR,              /* Attributes */                   \
+      64                                    /* Line size */                    \
+    ),                                                                         \
+                                                                               \
+    /* Thread Initialization */                                                \
+    {                                                                          \
+      PPTT_THREAD_INIT (pid, cid, coreId, 0),                                  \
+      PPTT_THREAD_INIT (pid, cid, coreId, 1)                                   \
+    }                                                                          \
+  }
+
+#define PPTT_CLUSTER_INIT(pid, cid)                                            \
+  {                                                                            \
+    /* Parameters for Cluster */                                               \
+    EFI_ACPI_6_3_PPTT_STRUCTURE_PROCESSOR_INIT (                               \
+      __builtin_offsetof (RDE1EDGE_PPTT_CLUSTER, L3Cache),  /* Length */       \
+      PPTT_PROCESSOR_CLUSTER_FLAGS,         /* Flag */                         \
+      __builtin_offsetof (EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE,    \
+        Package),                           /* Parent */                       \
+      0,                                    /* ACPI Id */                      \
+      1                                     /* Num of private resource */      \
+    ),                                                                         \
+                                                                               \
+    /* Offsets of the private resources */                                     \
+    __builtin_offsetof (EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE,      \
+      Package.Cluster[cid].L3Cache),                                           \
+                                                                               \
+    /* L3 cache parameters */                                                  \
+    EFI_ACPI_6_3_PPTT_STRUCTURE_CACHE_INIT (                                   \
+      PPTT_CACHE_STRUCTURE_FLAGS,           /* Flag */                         \
+      0,                                    /* Next level of cache */          \
+      SIZE_2MB,                             /* Size */                         \
+      2048,                                 /* Num of sets */                  \
+      16,                                   /* Associativity */                \
+      PPTT_UNIFIED_CACHE_ATTR,              /* Attributes */                   \
+      64                                    /* Line size */                    \
+    ),                                                                         \
+                                                                               \
+    /* Core Initialization */                                                  \
+    {                                                                          \
+      PPTT_CORE_INIT (pid, cid, 0),                                            \
+      PPTT_CORE_INIT (pid, cid, 1),                                            \
+      PPTT_CORE_INIT (pid, cid, 2),                                            \
+      PPTT_CORE_INIT (pid, cid, 3),                                            \
+      PPTT_CORE_INIT (pid, cid, 4),                                            \
+      PPTT_CORE_INIT (pid, cid, 5),                                            \
+      PPTT_CORE_INIT (pid, cid, 6),                                            \
+      PPTT_CORE_INIT (pid, cid, 7)                                             \
+    }                                                                          \
+  }
+
+#define PPTT_PACKAGE_INIT(pid)                                                 \
+  {                                                                            \
+    EFI_ACPI_6_3_PPTT_STRUCTURE_PROCESSOR_INIT (                               \
+      __builtin_offsetof (RDE1EDGE_PPTT_PACKAGE, Slc),                         \
+      PPTT_PROCESSOR_PACKAGE_FLAGS,                                            \
+      0,                                                                       \
+      0,                                                                       \
+      1                                                                        \
+    ),                                                                         \
+                                                                               \
+    /* Offsets of the private resources */                                     \
+    __builtin_offsetof (EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE,      \
+                       Package.Slc),                                           \
+                                                                               \
+    /* SLC parameters */                                                       \
+    EFI_ACPI_6_3_PPTT_STRUCTURE_CACHE_INIT (                                   \
+      PPTT_CACHE_STRUCTURE_FLAGS,         /* Flag */                           \
+      0,                                  /* Next level of cache */            \
+      SIZE_8MB,                           /* Size */                           \
+      8192,                               /* Num of sets */                    \
+      16,                                 /* Associativity */                  \
+      PPTT_UNIFIED_CACHE_ATTR,            /* Attributes */                     \
+      64                                  /* Line size */                      \
+    ),                                                                         \
+                                                                               \
+    {                                                                          \
+      PPTT_CLUSTER_INIT (pid, 0),                                              \
+      PPTT_CLUSTER_INIT (pid, 1),                                              \
+    }                                                                          \
+  }
+
+#pragma pack(1)
+typedef struct {
+  EFI_ACPI_6_3_PPTT_STRUCTURE_PROCESSOR Thread;
+} RDE1EDGE_PPTT_THREAD;
+
+typedef struct {
+  EFI_ACPI_6_3_PPTT_STRUCTURE_PROCESSOR  Core;
+  UINT32                                 Offset[2];
+  EFI_ACPI_6_3_PPTT_STRUCTURE_CACHE      DCache;
+  EFI_ACPI_6_3_PPTT_STRUCTURE_CACHE      ICache;
+  EFI_ACPI_6_3_PPTT_STRUCTURE_CACHE      L2Cache;
+  RDE1EDGE_PPTT_THREAD                   Thread[THREAD_PER_CORE];
+} RDE1EDGE_PPTT_CORE;
+
+typedef struct {
+  EFI_ACPI_6_3_PPTT_STRUCTURE_PROCESSOR  Cluster;
+  UINT32                                 Offset;
+  EFI_ACPI_6_3_PPTT_STRUCTURE_CACHE      L3Cache;
+  RDE1EDGE_PPTT_CORE                     Core[CORE_COUNT / THREAD_PER_CORE];
+} RDE1EDGE_PPTT_CLUSTER;
+
+typedef struct {
+  EFI_ACPI_6_3_PPTT_STRUCTURE_PROCESSOR  Package;
+  UINT32                                 Offset;
+  EFI_ACPI_6_3_PPTT_STRUCTURE_CACHE      Slc;
+  RDE1EDGE_PPTT_CLUSTER                  Cluster[CLUSTER_COUNT];
+} RDE1EDGE_PPTT_PACKAGE;
+
+/*
+ * Processor Properties Topology Table
+ */
+typedef struct {
+  EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE_HEADER  Header;
+  RDE1EDGE_PPTT_PACKAGE                                    Package;
+} EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE;
+#pragma pack ()
+
+STATIC EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE Pptt = {
+  {
+    ARM_ACPI_HEADER (
+      EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE_STRUCTURE_SIGNATURE,
+      EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE,
+      EFI_ACPI_6_3_PROCESSOR_PROPERTIES_TOPOLOGY_TABLE_REVISION
+    )
+  },
+
+  PPTT_PACKAGE_INIT (0)
+};
+
+/*
+ * Reference the table being generated to prevent the optimizer from removing
+ * the data structure from the executable
+ */
+VOID* CONST ReferenceAcpiTable = &Pptt;
