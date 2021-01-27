@@ -423,4 +423,57 @@ typedef struct {
     LineSize                                          /* Line size in bytes */ \
   }
 
+// CPPC _CPC object initialization
+#define CPPC_PACKAGE_INIT(DesiredPerfReg, PerfLimitedReg, GranularityMHz,      \
+  HighestPerf, NominalPerf, LowestNonlinearPerf, LowestPerf, RefPerf)          \
+  {                                                                            \
+    23,                                 /* NumEntries */                       \
+    3,                                  /* Revision */                         \
+    HighestPerf,                        /* Highest Performance */              \
+    NominalPerf,                        /* Nominal Performance */              \
+    LowestNonlinearPerf,                /* Lowest Nonlinear Performance */     \
+    LowestPerf,                         /* Lowest Performance */               \
+    /* Guaranteed Performance Register */                                      \
+    ResourceTemplate () { Register (SystemMemory, 0, 0, 0, 0) },               \
+    /* Desired Performance Register */                                         \
+    ResourceTemplate () { Register (SystemMemory, 32, 0, DesiredPerfReg, 3) }, \
+    /* Minimum Performance Register */                                         \
+    ResourceTemplate () { Register (SystemMemory, 0, 0, 0, 0) },               \
+    /* Maximum Performance Register */                                         \
+    ResourceTemplate () { Register (SystemMemory, 0, 0, 0, 0) },               \
+    /* Performance Reduction Tolerance Register */                             \
+    ResourceTemplate () { Register (SystemMemory, 0, 0, 0, 0) },               \
+    /* Time Window Register */                                                 \
+    ResourceTemplate () { Register (SystemMemory, 0, 0, 0, 0) },               \
+    /* Counter Wraparound Time */                                              \
+    ResourceTemplate () { Register (SystemMemory, 0, 0, 0, 0) },               \
+    /* Reference Performance Counter Register */                               \
+    ResourceTemplate () { Register (FFixedHW, 64, 0, 1, 4) },                  \
+    /* Delivered Performance Counter Register */                               \
+    ResourceTemplate () { Register (FFixedHW, 64, 0, 0, 4) },                  \
+    /* Performance Limited Register */                                         \
+    ResourceTemplate () { Register (SystemMemory, 32, 0, PerfLimitedReg, 3) }, \
+    /* CPPC Enable Register */                                                 \
+    ResourceTemplate () { Register (SystemMemory, 0, 0, 0, 0) },               \
+    /* Autonomous Selection Enable Register */                                 \
+    ResourceTemplate () { Register (SystemMemory, 0, 0, 0, 0) },               \
+    /* Autonomous Activity Window Register */                                  \
+    ResourceTemplate () { Register (SystemMemory, 0, 0, 0, 0) },               \
+    /* Energy Performance Preference Register */                               \
+    ResourceTemplate () { Register (SystemMemory, 0, 0, 0, 0) },               \
+    RefPerf,                            /* Reference Performance */            \
+    (LowestPerf * GranularityMHz),      /* Lowest Frequency */                 \
+    (NominalPerf * GranularityMHz),     /* Nominal Frequency */                \
+  }
+
+// Power state dependancy (_PSD) for CPPC
+#define PSD_INIT(Domain)                                                       \
+  {                                                                            \
+    5,              /* Entries */                                              \
+    0,              /* Revision */                                             \
+    Domain,         /* Domain */                                               \
+    0xFD,           /* Coord Type- SW_ANY */                                   \
+    1               /* Processors */                                           \
+  }
+
 #endif /* __SGI_ACPI_HEADER__ */
